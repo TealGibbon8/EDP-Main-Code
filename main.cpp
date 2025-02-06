@@ -4,6 +4,8 @@
 // Blinking rate in milliseconds
 #define BLINKING_RATE     500ms
 TextLCD lcd(p26, p25, p24, p23, p22, p21, TextLCD::LCD16x2);
+AnalogIn SigIn(p17);
+AnalogOut SigOut(p18);
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
 //register select p26, LCD pin4
 // Enable p25, LCD pin 6
@@ -12,6 +14,30 @@ TextLCD lcd(p26, p25, p24, p23, p22, p21, TextLCD::LCD16x2);
 // MSB2 p23, LCD pin 12
 // MSB1 P24, LCD pin 11
 int c; //A variable to count with, do not use count, it is something else entirely
+float previous, current;
+float alpha = 0.2;
+float inputs[10]; //number in brackets sets number of singals to include in average
+int ValsStored;
+int numOfVals = sizeof(inputs);
+float averaged;
+
+void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
+    current = alpha * SigIn + (1-alpha) * previous;
+    previous = current;
+}
+
+void RollingAverage() {
+    inputs[ValsStored] = current;
+    ValsStored ++;
+    if (ValsStored >= numOfVals-1) { //if required number of signals are recorded
+        float sum = 0;
+        for(int i = 0; i < numOfVals; i++) {
+            sum += inputs[i];
+        }
+        averaged = sum / numOfVals;
+        ValsStored = 0;
+    }
+}
 
 int main()
 {
@@ -35,6 +61,9 @@ int main()
         lcd.printf("Hello  %d \n", c); // prints to the second line
         ThisThread::sleep_for(BLINKING_RATE); //waits for a time, possible to interupt?
         */
+        FilterSignal();
+        RollingAverage();
+        SigOut = averaged;
     }
 }
 
