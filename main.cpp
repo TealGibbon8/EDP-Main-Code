@@ -16,16 +16,18 @@ Ticker TimerInt;
 // MSB1 P24, LCD pin 11
 int c; //A variable to count with, do not use count, it is something else entirely
 float signal = SigIn.read();
-float previous, current;
+float previous = 0;
+float current = 0;
 float alpha = 0.2;
 float inputs[10]; //number in brackets sets number of singals to include in average
-int ValsStored;
+int ValsStored = 0;
 int numOfVals = 10;
-float averaged;
+float averaged = 0;
 float stepSize = 0;
-float mini = 1;
-float maxi = 0;
-float output;
+float minValue = 1;
+float maxValue = 0;
+float output = 0;
+int digiOut = 0;
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
     current = alpha * signal + (1-alpha) * previous;
@@ -93,7 +95,49 @@ int main()
         }
         else {output = 0;}
         */
-        SigOut.write(signal);
+        FilterSignal();
+        RollingAverage();
+
+        if (averaged < minValue) {minValue = averaged;}
+        if (averaged > maxValue) {maxValue = averaged;}
+        int digiOut = 0;
+
+        ThisThread::sleep_for(2ms);
+
+        float PkPk = maxValue - minValue;
+        if (averaged < minValue+(PkPk*1/8)){
+            output=minValue;
+            digiOut = 0;
+        }
+        else if (averaged > minValue+(PkPk*1/8) && averaged <= minValue+(PkPk*2/8)){
+            output=minValue+(PkPk*1/7);
+            digiOut = 1;
+        }
+        else if (averaged > minValue+(PkPk*2/8) && averaged <= minValue+(PkPk*3/8)){
+            output=minValue+(PkPk*2/7);
+            digiOut = 2;
+        }
+        else if (averaged > minValue+(PkPk*3/8) && averaged <= minValue+(PkPk*4/8)){
+            output=minValue+(PkPk*3/7);
+            digiOut = 3;
+        }
+        else if (averaged > minValue+(PkPk*4/8) && averaged <= minValue+(PkPk*5/8)){
+            output=minValue+(PkPk*4/7);
+            digiOut = 4;
+        }
+        else if (averaged > minValue+(PkPk*5/8) && averaged <= minValue+(PkPk*6/8)){
+            output=minValue+(PkPk*5/7);
+            digiOut = 5;
+        }
+        else if (averaged > minValue+(PkPk*6/8) && averaged <= minValue+(PkPk*7/8)){
+            output=minValue+(PkPk*6/7);
+            digiOut = 6;
+        }
+        else if (averaged > minValue+(PkPk*7/8)){
+            output=minValue+(PkPk);
+            digiOut = 7;
+        }
+        SigOut.write(output);
         // lcd.printf("input  %.3f V\n", signal*3.3);
         // lcd.printf("output %.3f V\n", output*3.3);
         //lcd.printf("Da Dum Da Dum\nGroup 4\n");
