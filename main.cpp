@@ -61,10 +61,10 @@ int main()
     // DigitalOut led3(LED3);
     // DigitalOut led4(LED4);
     // c = 0;
-    TimerInt.attach(&printer, 5000us); // setup ticker to call flip at 50uS
+    //TimerInt.attach(&printer, 5000us); // setup ticker to call flip at 50uS
 
     while (true) {
-        signal = SigIn;
+        signal = SigIn.read();
         /*
         led1 = !led1; // debug lights, change when changing code to show the code has updated.
         led2 = !led2;
@@ -75,6 +75,7 @@ int main()
         lcd.printf("Hello  %d \n", c); // prints to the second line
         ThisThread::sleep_for(BLINKING_RATE); //waits for a time, possible to interupt?
         */
+        /*
         maxi = 0;
         mini = 1;
         if (signal > maxi) {
@@ -91,11 +92,12 @@ int main()
             output = averaged * stepSize;
         }
         else {output = 0;}
-        SigOut = output;
-        lcd.printf("input  %.3f V\n", signal*3.3);
-        lcd.printf("output %.3f V\n", output*3.3);
+        */
+        SigOut.write(signal);
+        // lcd.printf("input  %.3f V\n", signal*3.3);
+        // lcd.printf("output %.3f V\n", output*3.3);
         //lcd.printf("Da Dum Da Dum\nGroup 4\n");
-        ThisThread::sleep_for(BLINKING_RATE);
+        ThisThread::sleep_for(100ms);
     }
 }
 
