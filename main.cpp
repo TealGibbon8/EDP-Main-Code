@@ -3,9 +3,10 @@
 
 // Blinking rate in milliseconds
 #define WAIT_TIME    500us
-TextLCD lcd(p26, p25, p24, p23, p22, p21, TextLCD::LCD16x2);
+TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
 AnalogOut SigOut(p18);
+DigitalOut led1(LED1);
 Ticker TimerInt;
 Ticker PkRstTimer;
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
@@ -19,7 +20,7 @@ int c; //A variable to count with, do not use count, it is something else entire
 float signal = SigIn.read();
 float previous = 0;
 float current = 0;
-float alpha = 1.0;
+float alpha = 0.75;
 float inputs[5]; //number in brackets sets number of singals to include in average
 int ValsStored = 0;
 int numOfVals = 10;
@@ -29,6 +30,10 @@ float minValue = 1;
 float maxValue = 0;
 float output = 0;
 int digiOut = 0;
+int heartRate = 0;
+int beatCounter = 0;
+bool hasTroph = false;
+bool hasPeak = true;
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
     current = alpha * signal + (1-alpha) * previous;
@@ -47,40 +52,45 @@ void RollingAverage() {
         averaged = sum / numOfVals;
         ValsStored = 0;
     }
-    else{
-        averaged = 0;
-    }
 }
 
-void printer() {
-    lcd.printf("input  %.3f V\n", signal*3.3);
-    lcd.printf("output %.3f V\n", output*3.3);
-}
 
 void PKRst() {
-    minValue = 0;
+    minValue = 1;
     maxValue = 0;
+}
+
+void HRCalc() {
+    heartRate = beatCounter * 6;
+    beatCounter = 0;
+}
+
+void BeatChecker(int digiOut){
+    if(hasTroph && hasPeak) {
+        beatCounter++;
+        hasTroph = false;
+        hasPeak = false;
+    }
+    else if(digiOut <= 2) {
+        hasTroph = true;
+    }
+    else if(digiOut >= 7) {
+        hasPeak = true;
+    }
 }
 
 int main()
 {
-    // Initialise the digital pin LED1, LED2, LED3, LED4 as an output
-    //They are connected to LPC1678 pins P1.18, P1.20, P1.21 and P1.23 no external
-    //https://os.mbed.com/handbook/PwmOut#implementation-details will have PWM conflicts
-    // DigitalOut led1(LED1);
-    // DigitalOut led2(LED2);
-    // DigitalOut led3(LED3);
-    // DigitalOut led4(LED4);
     // c = 0;
-    //TimerInt.attach(&printer, 5ms); // setup ticker to call printer at 5mS
-    //PkRstTimer.attach(&PKRst, 2s);
+    PkRstTimer.attach(&PKRst, 2000ms);
+    TimerInt.attach(&HRCalc, 10000ms);
 
     while (true) {
         signal = SigIn.read();
     
         FilterSignal();
-        //RollingAverage();
-        averaged = current;
+        RollingAverage();
+        //averaged = current;
 
         if(averaged == 0) {}
         else {
@@ -123,11 +133,12 @@ int main()
                 digiOut = 7;
             }
             SigOut.write(output);
+            BeatChecker(digiOut);
         }
-        lcd.printf("min  %.3f V\n", minValue*3.3);
-        lcd.printf("max %.3f V\n", maxValue*3.3);
-        //lcd.printf("Da Dum Da Dum\nGroup 4\n");
-        //wait_us(500);
+        // lcd.printf("min  %.3f V\n", minValue*3.3);
+        // lcd.printf("max %.3f V\n", maxValue*3.3);
+        lcd.printf("Da Dum Da Dum G4\n");
+        lcd.printf("HeartRate %.3i BPM\n", heartRate);
     }
 }
 
