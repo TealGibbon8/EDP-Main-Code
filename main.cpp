@@ -61,36 +61,36 @@ void PKRst() {
 }
 
 void HRCalc() {
-    heartRate = beatCounter * 6;
+    heartRate = beatCounter*6;
     beatCounter = 0;
+    PKRst();
 }
 
 void BeatChecker(int digiOut){
-    if(hasTroph && hasPeak) {
+    if((digiOut == 0) && hasTroph && hasPeak) {
         beatCounter++;
         hasTroph = false;
         hasPeak = false;
     }
-    else if(digiOut <= 2) {
+    else if(digiOut == 1) {
         hasTroph = true;
     }
-    else if(digiOut >= 7) {
+    else if(digiOut >= 6) {
         hasPeak = true;
     }
 }
 
 int main()
 {
-    // c = 0;
-    PkRstTimer.attach(&PKRst, 2000ms);
+    //PkRstTimer.attach(&PKRst, 7000ms);
     TimerInt.attach(&HRCalc, 10000ms);
 
     while (true) {
         signal = SigIn.read();
     
         FilterSignal();
-        RollingAverage();
-        //averaged = current;
+        //RollingAverage();
+        averaged = current;
 
         if(averaged == 0) {}
         else {
@@ -137,8 +137,8 @@ int main()
         }
         // lcd.printf("min  %.3f V\n", minValue*3.3);
         // lcd.printf("max %.3f V\n", maxValue*3.3);
-        lcd.printf("Da Dum Da Dum G4\n");
-        lcd.printf("HeartRate %.3i BPM\n", heartRate);
+        //lcd.printf("(Da Dum)^2 G4\n");
+        lcd.printf("(Da Dum)^2 G4\nHR: %.2i BPM\n", heartRate);
     }
 }
 
