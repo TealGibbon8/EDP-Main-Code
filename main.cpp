@@ -7,8 +7,8 @@ TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
 AnalogOut SigOut(p18);
 DigitalOut led1(LED1);
-Ticker TimerInt;
-Ticker PkRstTimer;
+
+Timer beatTime;//timer to track time between heartbeats
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
 //register select p26, LCD pin4
 // Enable p25, LCD pin 6
@@ -30,8 +30,8 @@ float minValue = 1;
 float maxValue = 0;
 float output = 0;
 int digiOut = 0;
-int heartRate = 0;
-int beatCounter = 0;
+float heartRate = 0;
+
 bool hasTroph = false;
 bool hasPeak = true;
 
@@ -60,31 +60,34 @@ void PKRst() {
     maxValue = 0;
 }
 
-void HRCalc() {
-    heartRate = beatCounter*6;
-    beatCounter = 0;
-    PKRst();
-}
+
+
+
+
+
 
 void BeatChecker(int digiOut){
-    if((digiOut == 0) && hasTroph && hasPeak) {
-        beatCounter++;
+    if((digiOut == 0) && hasTroph && hasPeak) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
+        beatTime.stop();//stop the beat timer
+        heartRate = (1/beatTime.elapsed_time()) * (pow(10,6) * 60); //compute the heart rate, converting from beats per microsecond to beats per minute
         hasTroph = false;
         hasPeak = false;
+        PKRst();//reset the peaks to account for shift or outliers
+        beatTime.start();//restart the beat timer
     }
-    else if(digiOut == 1) {
+    else if(digiOut == 1) {//if leaving a troph
         hasTroph = true;
     }
-    else if(digiOut >= 6) {
+    else if(digiOut >= 6) {//if entering or in a peak
         hasPeak = true;
     }
 }
 
 int main()
 {
-    //PkRstTimer.attach(&PKRst, 7000ms);
-    TimerInt.attach(&HRCalc, 10000ms);
 
+
+    beatTime.start();
     while (true) {
         signal = SigIn.read();
     
@@ -138,7 +141,7 @@ int main()
         // lcd.printf("min  %.3f V\n", minValue*3.3);
         // lcd.printf("max %.3f V\n", maxValue*3.3);
         //lcd.printf("(Da Dum)^2 G4\n");
-        lcd.printf("(Da Dum)^2 G4\nHR: %.2i BPM\n", heartRate);
+        lcd.printf("(Da Dum)^2 G4\nHR: %.0f BPM\n", heartRate);
     }
 }
 
