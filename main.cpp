@@ -1,5 +1,6 @@
 #include "mbed.h"
 #include "TextLCD.h"
+#include <list>
 
 // Blinking rate in milliseconds
 #define WAIT_TIME    500us
@@ -12,7 +13,7 @@ SPI max72_spi(p5, NC, p7);
 DigitalOut load(p8); //will provide the load signal
 //DigitalIn LEDIN(p19);
 //DigitalOut beatLED(LED1);
-
+Ticker reseter;
 Timer beatTime;//timer to track time between heartbeats
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
 //register select p26, LCD pin4
@@ -26,8 +27,9 @@ float signal = SigIn.read();
 float previous = 0;
 float current = 0;
 float alpha = 0.75;
-float inputs[5]; //number in brackets sets number of singals to include in average
-int ValsStored = 0;
+int average_sample_size = 5;
+list<float> inputs; //number in brackets sets number of singals to include in average
+list<float> averages;
 int numOfVals = 10;
 float averaged = 0;
 float stepSize = 0;
@@ -39,29 +41,30 @@ float heartRate = 0;
 long period = 0;
 int edges = 0;
 
+
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
     current = alpha * signal + (1-alpha) * previous;
     previous = current;
 }
 
 void RollingAverage() {
-    numOfVals = sizeof(inputs);
-    inputs[ValsStored] = current;
-    ValsStored ++;
-    if (ValsStored >= numOfVals-1) { //if required number of signals are recorded
-        float sum = 0;
-        for(int i = 0; i < numOfVals; i++) {
-            sum += inputs[i];
-        }
-        averaged = sum / numOfVals;
-        ValsStored = 0;
+    numOfVals = inputs.size();
+    inputs.push_front(current);
+    while (numOfVals >= average_sample_size) { //reduce list to sample size
+        inputs.pop_back();
     }
+    float sum = 0;
+    for(float f: inputs) {
+        sum += f;
+    }
+    averaged = sum / numOfVals;
+    averages.push_front(averaged);
 }
 
 
 void PKRst() {
-    minValue = 1;
-    maxValue = 0;
+    minValue = averaged;
+    maxValue = averaged;
 }
 
 void LEDPulse() {
@@ -69,15 +72,15 @@ void LEDPulse() {
 }
 
 void BeatChecker(int digiOut){
-    if((digiOut == 0) && edges==3) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
+    if(edges==3) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
         beatTime.stop();//stop the beat timer
         period = beatTime.elapsed_time().count();
         heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
         edges = 0;
-        PKRst();//reset the peaks to account for shift or outliers
+        //PKRst();//reset the peaks to account for shift or outliers
         beatTime.start();//restart the beat timer
     }
-    else if(digiOut <= 1 || digiOut >= 6) {//if an edge is detected
+    else if(digiOut <= 2 || digiOut >= 5) {//if an edge is detected
         edges++;
     }
     
@@ -89,7 +92,7 @@ void EightbyEightOutput(int digiout) {
 
 int main()
 {
-
+    reseter.attach(&PKRst, 10s);
     beatTime.start();
     while (true) {
         PWM1 = 1;
@@ -98,8 +101,8 @@ int main()
         signal = SigIn.read();
     
         FilterSignal();
-        //RollingAverage();
-        averaged = current;
+        RollingAverage();
+        //averaged = current;
 
         if(averaged == 0) {}
         else {
@@ -146,9 +149,9 @@ int main()
             BeatChecker(digiOut);
         }
 
-        if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
+        //if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
         // lcd.printf("min  %.3f V\n", minValue*3.3);
-         lcd.printf("period %.3li V\n", period);
+        lcd.printf("period %.3li V\n", period);
         //lcd.printf("(Da Dum)^2 G4\n");
         lcd.printf("HR: %.0f BPM\n", heartRate);
     }
