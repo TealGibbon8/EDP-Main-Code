@@ -5,8 +5,11 @@
 #define WAIT_TIME    500us
 TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
+AnalogIn switchIn(p20);
 AnalogOut SigOut(p18);
-DigitalOut led1(LED1);
+PwmOut PWM1(LED1);
+SPI max72_spi(p5, NC, p7);
+DigitalOut load(p8); //will provide the load signal
 
 Timer beatTime;//timer to track time between heartbeats
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
@@ -31,9 +34,8 @@ float maxValue = 0;
 float output = 0;
 int digiOut = 0;
 float heartRate = 0;
-
-bool hasTroph = false;
-bool hasPeak = true;
+int period = 0;
+int edges = 0;
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
     current = alpha * signal + (1-alpha) * previous;
@@ -60,32 +62,33 @@ void PKRst() {
     maxValue = 0;
 }
 
-
-
-
-
-
+void LEDPulse() {
+    PWM1.period_ms(period/1000.0);
+}
 
 void BeatChecker(int digiOut){
-    if((digiOut == 0) && hasTroph && hasPeak) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
+    if((digiOut == 0) && edges==3) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
         beatTime.stop();//stop the beat timer
-        heartRate = (1/beatTime.elapsed_time()) * (pow(10,6) * 60); //compute the heart rate, converting from beats per microsecond to beats per minute
-        hasTroph = false;
-        hasPeak = false;
+        period = beatTime.elapsed_time().count();
+        heartRate = (1.0/period) * (pow(10,6) * 60); //compute the heart rate, converting from beats per microsecond to beats per minute
+        edges = 0;
+        LEDPulse();
         PKRst();//reset the peaks to account for shift or outliers
         beatTime.start();//restart the beat timer
     }
-    else if(digiOut == 1) {//if leaving a troph
-        hasTroph = true;
+    else if(digiOut <= 1 || digiOut >= 6) {//if an edge is detected
+        edges++;
     }
-    else if(digiOut >= 6) {//if entering or in a peak
-        hasPeak = true;
-    }
+    
+}
+
+void EightbyEightOutput(int digiout) {
+
 }
 
 int main()
 {
-
+    PWM1 = 0.5;
 
     beatTime.start();
     while (true) {
@@ -136,6 +139,7 @@ int main()
                 digiOut = 7;
             }
             SigOut.write(output);
+            EightbyEightOutput(digiOut);
             BeatChecker(digiOut);
         }
         // lcd.printf("min  %.3f V\n", minValue*3.3);
