@@ -10,6 +10,8 @@ AnalogOut SigOut(p18);
 PwmOut PWM1(LED1);
 SPI max72_spi(p5, NC, p7);
 DigitalOut load(p8); //will provide the load signal
+//DigitalIn LEDIN(p19);
+//DigitalOut beatLED(LED1);
 
 Timer beatTime;//timer to track time between heartbeats
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
@@ -34,7 +36,7 @@ float maxValue = 0;
 float output = 0;
 int digiOut = 0;
 float heartRate = 0;
-int period = 0;
+long period = 0;
 int edges = 0;
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
@@ -70,9 +72,8 @@ void BeatChecker(int digiOut){
     if((digiOut == 0) && edges==3) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
         beatTime.stop();//stop the beat timer
         period = beatTime.elapsed_time().count();
-        heartRate = (1.0/period) * (pow(10,6) * 60); //compute the heart rate, converting from beats per microsecond to beats per minute
+        heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
         edges = 0;
-        LEDPulse();
         PKRst();//reset the peaks to account for shift or outliers
         beatTime.start();//restart the beat timer
     }
@@ -88,10 +89,12 @@ void EightbyEightOutput(int digiout) {
 
 int main()
 {
-    PWM1 = 0.5;
 
     beatTime.start();
     while (true) {
+        PWM1 = 1;
+        PWM1.period_ms(1000);
+        //beatLED = LEDIN;
         signal = SigIn.read();
     
         FilterSignal();
@@ -142,10 +145,12 @@ int main()
             EightbyEightOutput(digiOut);
             BeatChecker(digiOut);
         }
+
+        if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
         // lcd.printf("min  %.3f V\n", minValue*3.3);
-        // lcd.printf("max %.3f V\n", maxValue*3.3);
+         lcd.printf("period %.3li V\n", period);
         //lcd.printf("(Da Dum)^2 G4\n");
-        lcd.printf("(Da Dum)^2 G4\nHR: %.0f BPM\n", heartRate);
+        lcd.printf("HR: %.0f BPM\n", heartRate);
     }
 }
 
