@@ -13,6 +13,7 @@ DigitalOut load(p8); //will provide the load signal
 //DigitalIn LEDIN(p19);
 //DigitalOut beatLED(LED1);
 Ticker reseter;
+Ticker sampling;
 Timer beatTime;//timer to track time between heartbeats
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
 //register select p26, LCD pin4
@@ -94,27 +95,24 @@ void BeatChecker(int digiOut){
             firstTime = beatTime.elapsed_time().count();
         }
     }
-    
 }
 
 void EightbyEightOutput(int digiout) {
 
 }
 
+void samplingRate() {
+    signal = SigIn.read();
+    FilterSignal();
+    RollingAverage();
+}
+
 int main()
 {
     reseter.attach(&PKRst, 10s);
+    sampling.attach(&samplingRate, 100ms);
     beatTime.start();
     while (true) {
-        PWM1 = 1;
-        PWM1.period_ms(1000);
-        //beatLED = LEDIN;
-        signal = SigIn.read();
-    
-        FilterSignal();
-        RollingAverage();
-        //averaged = current;
-
         if(averaged == 0) {}
         else {
             if (averaged < minValue) {minValue = averaged;}
@@ -165,7 +163,6 @@ int main()
         lcd.printf("period %.3li V\n", period);
         //lcd.printf("(Da Dum)^2 G4\n");
         lcd.printf("HR: %.0f BPM\n", heartRate);
-        //ThisThread::sleep_for(5ms);
     }
 }
 
