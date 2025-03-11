@@ -3,7 +3,6 @@
 #include <list>
 
 // Blinking rate in milliseconds
-#define WAIT_TIME    500us
 TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
 AnalogIn switchIn(p20);
@@ -28,8 +27,11 @@ float previous = 0;
 float current = 0;
 float alpha = 0.75;
 int average_sample_size = 5;
+int big_average_sample_size = 30;
 list<float> inputs; //number in brackets sets number of singals to include in average
 list<float> averages;
+float av_max = 1;
+float av_min = 0;
 int numOfVals = 10;
 float averaged = 0;
 float stepSize = 0;
@@ -40,6 +42,7 @@ int digiOut = 0;
 float heartRate = 0;
 long period = 0;
 int edges = 0;
+long firstTime = 0;
 
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
@@ -50,7 +53,7 @@ void FilterSignal() { //apply the first order filtering equation to the incoming
 void RollingAverage() {
     numOfVals = inputs.size();
     inputs.push_front(current);
-    while (numOfVals >= average_sample_size) { //reduce list to sample size
+    while (inputs.size() > average_sample_size) { //reduce list to sample size
         inputs.pop_back();
     }
     float sum = 0;
@@ -59,12 +62,17 @@ void RollingAverage() {
     }
     averaged = sum / numOfVals;
     averages.push_front(averaged);
+    while (averages.size() > big_average_sample_size) { //reduce list to sample size
+        averages.pop_back();
+    }
 }
 
 
 void PKRst() {
-    minValue = averaged;
-    maxValue = averaged;
+    list<float> sorted_averages(averages);
+    sorted_averages.sort();
+    minValue = sorted_averages.back();
+    maxValue = sorted_averages.front();
 }
 
 void LEDPulse() {
@@ -72,16 +80,19 @@ void LEDPulse() {
 }
 
 void BeatChecker(int digiOut){
-    if(edges==3) { //if at a troph and there has already been a troph and peak, record a beat and calculate the new heartrate
+    if(edges==3) { //if three edges have been detected (a whole beat)
         beatTime.stop();//stop the beat timer
-        period = beatTime.elapsed_time().count();
+        period = beatTime.elapsed_time().count() - firstTime;//calculate the period
         heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
-        edges = 0;
-        //PKRst();//reset the peaks to account for shift or outliers
+        edges = 0;//reset edges
+        PKRst();//reset the peaks to account for shift or outliers
         beatTime.start();//restart the beat timer
     }
     else if(digiOut <= 2 || digiOut >= 5) {//if an edge is detected
         edges++;
+        if (edges == 1) {
+            firstTime = beatTime.elapsed_time().count();
+        }
     }
     
 }
@@ -154,6 +165,7 @@ int main()
         lcd.printf("period %.3li V\n", period);
         //lcd.printf("(Da Dum)^2 G4\n");
         lcd.printf("HR: %.0f BPM\n", heartRate);
+        //ThisThread::sleep_for(5ms);
     }
 }
 
