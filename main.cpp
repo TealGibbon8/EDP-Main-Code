@@ -2,12 +2,29 @@
 #include "TextLCD.h"
 #include <list>
 
+#define max7219_reg_noop         0x00
+#define max7219_reg_digit0       0x01
+#define max7219_reg_digit1       0x02
+#define max7219_reg_digit2       0x03
+#define max7219_reg_digit3       0x04
+#define max7219_reg_digit4       0x05
+#define max7219_reg_digit5       0x06
+#define max7219_reg_digit6       0x07
+#define max7219_reg_digit7       0x08
+#define max7219_reg_decodeMode   0x09
+#define max7219_reg_intensity    0x0a
+#define max7219_reg_scanLimit    0x0b
+#define max7219_reg_shutdown     0x0c
+#define max7219_reg_displayTest  0x0f
+
+#define LOW 0
+#define HIGH 1
+
 // Blinking rate in milliseconds
 TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
 DigitalIn switchIn(p20);
 AnalogOut SigOut(p18);
-PwmOut PWM1(LED1);
 SPI max72_spi(p5, NC, p7);
 DigitalOut load(p8); //will provide the load signal
 //DigitalIn LEDIN(p19);
@@ -15,6 +32,7 @@ DigitalOut beatLED(LED1);
 Ticker reseter;
 Ticker sampling;
 Timer beatTime;//timer to track time between heartbeats
+Timer LEDTimer;
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
 //register select p26, LCD pin4
 // Enable p25, LCD pin 6
@@ -22,7 +40,6 @@ Timer beatTime;//timer to track time between heartbeats
 // MSB3 p22, LCD pin 13
 // MSB2 p23, LCD pin 12
 // MSB1 P24, LCD pin 11
-int c; //A variable to count with, do not use count, it is something else entirely
 float signal = SigIn.read();
 float previous = 0;
 float current = 0;
@@ -48,6 +65,13 @@ long firstTime = 0;
 int averages_size = 0;
 bool filtered = false;
 float PkPk = 0;
+int LEDTime = 1000;
+long lastLEDTime = 0;
+float minV = 1;
+float maxV = 0;
+
+char values[8] = {0x00, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
+char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
@@ -80,8 +104,8 @@ void RollingAverage() {
 
 
 void PKRst() {
-    minValue = sorted_averages.back();
-    maxValue = sorted_averages.front();
+    minValue = minV;
+    maxValue = maxV;
 }
 
 void BeatChecker(int digiOut){
@@ -122,15 +146,76 @@ void BeatChecker(int digiOut){
     averages.push_front(averaged);
     sorted_averages.push_front(averaged);
     sorted_averages.sort();
+    minV = sorted_averages.back();
+    maxV = sorted_averages.front();
+}
+
+void write_to_max( int reg, int col)
+{
+    load = LOW;            // begin
+    max72_spi.write(reg);  // specify register
+    max72_spi.write(col);  // put data
+    load = HIGH;           // make sure data is loaded (on rising edge of LOAD/CS)
+    //pc.printf("Writing\n");
+}
+
+//writes 8 bytes to the display  
+void pattern_to_display(char *testdata){
+    int cdata; 
+    for(int idx = 0; idx <= 7; idx++) {
+        cdata = testdata[idx]; 
+        write_to_max(idx+1,cdata);
+    }
+} 
+ 
+
+void setup_dot_matrix ()
+{
+    // initiation of the max 7219
+    // SPI setup: 8 bits, mode 0
+    max72_spi.format(8, 0);
+     
+  
+  
+       max72_spi.frequency(100000); //down to 100khx easier to scope ;-)
+      
+
+    write_to_max(max7219_reg_scanLimit, 0x07);
+    write_to_max(max7219_reg_decodeMode, 0x00);  // using an led matrix (not digits)
+    write_to_max(max7219_reg_shutdown, 0x01);    // not in shutdown mode
+    write_to_max(max7219_reg_displayTest, 0x00); // no display test
+    for (int e=1; e<=8; e++) {    // empty registers, turn all LEDs off
+        write_to_max(e,0);
+    }
+   // maxAll(max7219_reg_intensity, 0x0f & 0x0f);    // the first 0x0f is the value you can set
+     write_to_max(max7219_reg_intensity,  0x08);     
+ 
+}
+
+void clear(){
+     for (int e=1; e<=8; e++) {    // empty registers, turn all LEDs off
+        write_to_max(e,0);
+    }
 }
 
 void EightbyEightOutput(int digiout) {
-
+    char value = values[digiout];
+    char newOutput[8];
+    newOutput[0] = value;
+    for(int i = 6; i> 0; i--) {
+        newOutput[i+1] = displayOutput[i];
+    }
+    for(int i = 0; i < 8; i++) {
+        displayOutput[i] = newOutput[i];
+    }
+    pattern_to_display(displayOutput);
 }
 
 int main()
 {
-    //reseter.attach(&PKRst, 10s);
+    setup_dot_matrix();
+    reseter.attach(&PKRst, 2s);
+    LEDTimer.start();
     beatTime.start();
     while (true) {
         signal = SigIn.read();//take signal input
@@ -186,23 +271,30 @@ int main()
 
         //if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
         if(switchIn == 1) {// if the switch is sending power, use the LCD
-            PWM1 = 0;
+            beatLED = 0;
             // lcd.printf("min  %.3f V\n", minValue*3.3);
-            //lcd.printf("period %.3li us\n", period);
+            lcd.printf("period %.3li us\n", period);
             //lcd.printf("(Da Dum)^2 G4\n");
-            //lcd.printf("HR: %.0f BPM\n", heartRate);
-            lcd.printf("averaged: %0.2f\n",averaged);
-            lcd.printf("last: %0.2f\n",averages.front());
+            lcd.printf("HR: %.0f BPM\n", heartRate);
+            //lcd.printf("averaged: %0.2f\n",averaged);
+            //lcd.printf("last: %0.2f\n",averages.front());
+
         }
         else {// if the switch is not using power, use the LED
-            lcd.printf(" \n \n");
-            PWM1.period_ms(period/1000.0);
-            PWM1 = 0.5;
+            lcd.printf("               \n                \n");
+            LEDTime = period/2;
+            if (lastLEDTime == 0) {
+                lastLEDTime = LEDTimer.elapsed_time().count();
+            }
+            if(LEDTimer.elapsed_time().count() - lastLEDTime >= LEDTime) {
+                beatLED = !beatLED;
+                lastLEDTime = LEDTimer.elapsed_time().count();
+            }
         }
         /*
         SigOut.write(averaged);
         lcd.printf("Average: %0.2f\n",(averaged));*/
-        wait_us(70000);
+        wait_us(50000);
     }
 }
 
