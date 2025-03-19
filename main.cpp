@@ -59,7 +59,7 @@ float maxValue = 0;
 float output = 0;
 int digiOut = 0;
 float heartRate = 0;
-long period = 0;
+int period = 0;
 int edges = 0;
 long firstTime = 0;
 int averages_size = 0;
@@ -70,8 +70,9 @@ long lastLEDTime = 0;
 float minV = 1;
 float maxV = 0;
 
-char values[8] = {0x00, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
+char values[8] = {0x01, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+char defaultOutput[8] = {0x02, 0x08, 0x40, 0x80, 0x20, 0x08, 0x20, 0x02};
 
 
 void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
@@ -109,6 +110,7 @@ void PKRst() {
 }
 
 void BeatChecker(int digiOut){
+    /*
     if(averaged <= minValue+(PkPk*0.2) && (averaged > averages.front()) && edges == 2) { //if rising edge detected and other edges already detected
         period = beatTime.elapsed_time().count() - firstTime;//calculate the period
         heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
@@ -142,6 +144,20 @@ void BeatChecker(int digiOut){
         else if(averaged < averages.front() && averaged > minValue+(relPkPk*0.8)) {//if an edge is detected and is falling
             edges++;
         }
+    }
+    */
+    if((digiOut >= 1) /*&& (averaged > averages.front())*/ && edges == 2) { //if rising edge detected and other edges already detected
+        period = int(beatTime.elapsed_time().count());//calculate the period
+        heartRate = 60000000.0/period; //compute the heart rate, converting from beats per microsecond to beats per minute
+        edges = 0;//reset edges
+        PKRst();//reset the peaks to account for shift or outliers
+        beatTime.reset();
+    }
+    else if((digiOut <= 1) /*&& (averaged > averages.front())*/) {//if an edge is detected and rising
+        edges++;
+    }
+    else if(/*averaged < averages.front() &&*/ digiOut >= 6) {//if an edge is detected and is falling
+        edges++;
     }
     averages.push_front(averaged);
     sorted_averages.push_front(averaged);
@@ -200,10 +216,10 @@ void clear(){
 
 void EightbyEightOutput(int digiout) {
     char value = values[digiout];
-    char newOutput[8];
+    char newOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     newOutput[0] = value;
-    for(int i = 6; i> 0; i--) {
-        newOutput[i+1] = displayOutput[i];
+    for(int i = 1; i < 7; i++) {
+        newOutput[i] = displayOutput[i-1];
     }
     for(int i = 0; i < 8; i++) {
         displayOutput[i] = newOutput[i];
@@ -267,21 +283,26 @@ int main()
             SigOut.write(output);
             EightbyEightOutput(digiOut);
             BeatChecker(digiOut);
+            /*if(heartRate > 0) {
+                EightbyEightOutput(digiOut);
+            }
+            else {pattern_to_display(defaultOutput);}*/
         }
 
         //if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
         if(switchIn == 1) {// if the switch is sending power, use the LCD
             beatLED = 0;
             // lcd.printf("min  %.3f V\n", minValue*3.3);
-            lcd.printf("period %.3li us\n", period);
+            //lcd.printf("period %.3i us\n", period);
             //lcd.printf("(Da Dum)^2 G4\n");
-            lcd.printf("HR: %.0f BPM\n", heartRate);
+            lcd.printf("HR: %.0f BPM\n                \n", heartRate);
             //lcd.printf("averaged: %0.2f\n",averaged);
             //lcd.printf("last: %0.2f\n",averages.front());
 
         }
         else {// if the switch is not using power, use the LED
-            lcd.printf("               \n                \n");
+            //lcd.printf("               \n                \n");
+            lcd.printf("period %.3i us\n                \n", period);
             LEDTime = period/2;
             if (lastLEDTime == 0) {
                 lastLEDTime = LEDTimer.elapsed_time().count();
@@ -297,4 +318,3 @@ int main()
         wait_us(50000);
     }
 }
-
