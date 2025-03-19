@@ -1,5 +1,6 @@
 #include "mbed.h"
 #include "TextLCD.h"
+#include <chrono>
 #include <list>
 
 #define max7219_reg_noop         0x00
@@ -61,14 +62,16 @@ int digiOut = 0;
 float heartRate = 0;
 int period = 0;
 int edges = 0;
-long firstTime = 0;
+int firstTime = 0;
 int averages_size = 0;
 bool filtered = false;
 float PkPk = 0;
 int LEDTime = 1000;
-long lastLEDTime = 0;
+int lastLEDTime = 0;
 float minV = 1;
 float maxV = 0;
+bool risingEdge = false;
+bool fallingEdge = false;
 
 char values[8] = {0x01, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -146,18 +149,25 @@ void BeatChecker(int digiOut){
         }
     }
     */
-    if((digiOut >= 1) /*&& (averaged > averages.front())*/ && edges == 2) { //if rising edge detected and other edges already detected
-        period = int(beatTime.elapsed_time().count());//calculate the period
-        heartRate = 60000000.0/period; //compute the heart rate, converting from beats per microsecond to beats per minute
+    if((digiOut <= 1) && edges == 2 && risingEdge) { //if rising edge detected and other edges already detected
+        period = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count() - firstTime;//calculate the period
+        heartRate = 60000.0/period; //compute the heart rate, converting from beats per microsecond to beats per minute
         edges = 0;//reset edges
-        PKRst();//reset the peaks to account for shift or outliers
+        risingEdge = false;
+        fallingEdge = false;
+        //PKRst();//reset the peaks to account for shift or outliers
         beatTime.reset();
     }
-    else if((digiOut <= 1) /*&& (averaged > averages.front())*/) {//if an edge is detected and rising
+    else if((digiOut <= 1) && !risingEdge) {//if an edge is detected and rising
         edges++;
+        risingEdge = true;
+        if (edges == 1) {
+            firstTime = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count() ;
+        }
     }
-    else if(/*averaged < averages.front() &&*/ digiOut >= 6) {//if an edge is detected and is falling
+    else if(digiOut >= 6 && !fallingEdge) {//if an edge is detected and is falling
         edges++;
+        fallingEdge = true;
     }
     averages.push_front(averaged);
     sorted_averages.push_front(averaged);
@@ -218,7 +228,7 @@ void EightbyEightOutput(int digiout) {
     char value = values[digiout];
     char newOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     newOutput[0] = value;
-    for(int i = 1; i < 7; i++) {
+    for(int i = 1; i <= 7; i++) {
         newOutput[i] = displayOutput[i-1];
     }
     for(int i = 0; i < 8; i++) {
@@ -293,7 +303,7 @@ int main()
         if(switchIn == 1) {// if the switch is sending power, use the LCD
             beatLED = 0;
             // lcd.printf("min  %.3f V\n", minValue*3.3);
-            //lcd.printf("period %.3i us\n", period);
+            //lcd.printf("period %.3i ms\n", period);
             //lcd.printf("(Da Dum)^2 G4\n");
             lcd.printf("HR: %.0f BPM\n                \n", heartRate);
             //lcd.printf("averaged: %0.2f\n",averaged);
@@ -302,14 +312,11 @@ int main()
         }
         else {// if the switch is not using power, use the LED
             //lcd.printf("               \n                \n");
-            lcd.printf("period %.3i us\n                \n", period);
+            lcd.printf("period %.3i ms\n                \n", period);
             LEDTime = period/2;
-            if (lastLEDTime == 0) {
-                lastLEDTime = LEDTimer.elapsed_time().count();
-            }
-            if(LEDTimer.elapsed_time().count() - lastLEDTime >= LEDTime) {
+            if(LEDTimer.elapsed_time().count() >= LEDTime) {
                 beatLED = !beatLED;
-                lastLEDTime = LEDTimer.elapsed_time().count();
+                LEDTimer.reset();
             }
         }
         /*
