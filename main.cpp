@@ -28,7 +28,6 @@ DigitalIn switchIn(p20);
 AnalogOut SigOut(p18);
 SPI max72_spi(p5, NC, p7);
 DigitalOut load(p8); //will provide the load signal
-//DigitalIn LEDIN(p19);
 DigitalOut beatLED(LED1);
 Ticker reseter;
 Ticker sampling;
@@ -60,6 +59,7 @@ float maxValue = 0;
 float output = 0;
 int digiOut = 0;
 float heartRate = 0;
+float previous_HR = 0;
 int period = 0;
 int edges = 0;
 int firstTime = 0;
@@ -72,6 +72,7 @@ float minV = 1;
 float maxV = 0;
 bool risingEdge = false;
 bool fallingEdge = false;
+int sampling_time = 50000;
 
 char values[8] = {0x01, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -113,59 +114,27 @@ void PKRst() {
 }
 
 void BeatChecker(int digiOut){
-    /*
-    if(averaged <= minValue+(PkPk*0.2) && (averaged > averages.front()) && edges == 2) { //if rising edge detected and other edges already detected
-        period = beatTime.elapsed_time().count() - firstTime;//calculate the period
-        heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
-        edges = 0;//reset edges
-        PKRst();//reset the peaks to account for shift or outliers
-    }
-    else if(averaged <= minValue+(PkPk*0.2) && (averaged > averages.front())) {//if an edge is detected and rising
-        edges++;
-        if (edges == 1) {
-            firstTime = beatTime.elapsed_time().count();
-        }
-    }
-    else if(averaged < averages.front() && averaged > minValue+(PkPk*0.8)) {//if an edge is detected and is falling
-        edges++;
-    }
-    //check if pulse is outside of regular timing
-    int relPkPk = sorted_averages.front() - sorted_averages.back();
-    if(PkPk > relPkPk) {
-        if(averaged <= minValue+(relPkPk*0.2) && (averaged > averages.front()) && edges == 2) { //if rising edge detected and other edges already detected
-        period = beatTime.elapsed_time().count() - firstTime;//calculate the period
-        heartRate = (1.0/period) * pow(10,6) * 60; //compute the heart rate, converting from beats per microsecond to beats per minute
-        edges = 0;//reset edges
-        PKRst();//reset the peaks to account for shift or outliers
-        }
-        else if(averaged <= minValue+(relPkPk*0.2) && (averaged > averages.front())) {//if an edge is detected and rising
-            edges++;
-            if (edges == 1) {
-                firstTime = beatTime.elapsed_time().count();
-            }
-        }
-        else if(averaged < averages.front() && averaged > minValue+(relPkPk*0.8)) {//if an edge is detected and is falling
-            edges++;
-        }
-    }
-    */
-    if((digiOut <= 1) && edges == 2 && risingEdge) { //if rising edge detected and other edges already detected
+    if((averaged <= minValue+(PkPk*0.2)) && edges == 2 && risingEdge) { //if rising edge detected and other edges already detected
         period = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count() - firstTime;//calculate the period
+        previous_HR = heartRate;
         heartRate = 60000.0/period; //compute the heart rate, converting from beats per microsecond to beats per minute
+        if((heartRate >= previous_HR * 1.25 && heartRate >=60) || heartRate <= previous_HR * 0.75) {
+            heartRate = previous_HR;
+        }
         edges = 0;//reset edges
         risingEdge = false;
         fallingEdge = false;
         //PKRst();//reset the peaks to account for shift or outliers
         beatTime.reset();
     }
-    else if((digiOut <= 1) && !risingEdge) {//if an edge is detected and rising
+    else if((averaged <= minValue+(PkPk*0.2)) && !risingEdge) {//if an edge is detected and rising
         edges++;
         risingEdge = true;
         if (edges == 1) {
             firstTime = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count() ;
         }
     }
-    else if(digiOut >= 6 && !fallingEdge) {//if an edge is detected and is falling
+    else if(averaged > minValue+(PkPk*0.8) && !fallingEdge) {//if an edge is detected and is falling
         edges++;
         fallingEdge = true;
     }
@@ -304,15 +273,21 @@ int main()
             beatLED = 0;
             // lcd.printf("min  %.3f V\n", minValue*3.3);
             //lcd.printf("period %.3i ms\n", period);
-            //lcd.printf("(Da Dum)^2 G4\n");
-            lcd.printf("HR: %.0f BPM\n                \n", heartRate);
+            lcd.printf("(Da Dum)^2 G4\n");
+            if(heartRate < 40) {
+                lcd.printf("Finding HR\n");
+            }
+            else {
+                lcd.printf("HR: %.0f BPM\n", heartRate);
+            }
             //lcd.printf("averaged: %0.2f\n",averaged);
             //lcd.printf("last: %0.2f\n",averages.front());
 
         }
         else {// if the switch is not using power, use the LED
             //lcd.printf("               \n                \n");
-            lcd.printf("period %.3i ms\n                \n", period);
+            lcd.printf("(Da Dum)^2 G4\n");
+            lcd.printf("period %.3i ms\n", period);
             LEDTime = period/2;
             if(LEDTimer.elapsed_time().count() >= LEDTime) {
                 beatLED = !beatLED;
@@ -322,6 +297,9 @@ int main()
         /*
         SigOut.write(averaged);
         lcd.printf("Average: %0.2f\n",(averaged));*/
-        wait_us(50000);
+        /*if(period > 100) {
+            sampling_time = period/8*1000;
+        }*/
+        wait_us(sampling_time);
     }
 }
