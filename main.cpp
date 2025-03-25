@@ -30,7 +30,6 @@ SPI max72_spi(p5, NC, p7);
 DigitalOut load(p8); //will provide the load signal
 DigitalOut beatLED(LED1);
 Ticker reseter;
-Ticker sampling;
 Timer beatTime;//timer to track time between heartbeats
 Timer LEDTimer;
 //TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
@@ -78,12 +77,6 @@ char values[8] = {0x01, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 char defaultOutput[8] = {0x02, 0x08, 0x40, 0x80, 0x20, 0x08, 0x20, 0x02};
 
-
-void FilterSignal() { //apply the first order filtering equation to the incoming analog signal
-    current = alpha * signal + (1-alpha) * previous;
-    previous = current;
-}
-
 void RollingAverage() {
     if(filtered) {
         numOfVals = inputs.size();
@@ -107,7 +100,6 @@ void RollingAverage() {
     }
 }
 
-
 void PKRst() {
     minValue = minV;
     maxValue = maxV;
@@ -124,14 +116,13 @@ void BeatChecker(int digiOut){
         edges = 0;//reset edges
         risingEdge = false;
         fallingEdge = false;
-        //PKRst();//reset the peaks to account for shift or outliers
         beatTime.reset();
     }
     else if((averaged <= minValue+(PkPk*0.2)) && !risingEdge) {//if an edge is detected and rising
         edges++;
         risingEdge = true;
         if (edges == 1) {
-            firstTime = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count() ;
+            firstTime = std::chrono::duration_cast<std::chrono::milliseconds>(beatTime.elapsed_time()).count();
         }
     }
     else if(averaged > minValue+(PkPk*0.8) && !fallingEdge) {//if an edge is detected and is falling
@@ -151,7 +142,6 @@ void write_to_max( int reg, int col)
     max72_spi.write(reg);  // specify register
     max72_spi.write(col);  // put data
     load = HIGH;           // make sure data is loaded (on rising edge of LOAD/CS)
-    //pc.printf("Writing\n");
 }
 
 //writes 8 bytes to the display  
@@ -260,19 +250,16 @@ int main()
                 digiOut = 7;
             }
             SigOut.write(output);
-            EightbyEightOutput(digiOut);
             BeatChecker(digiOut);
-            /*if(heartRate > 0) {
+            if(heartRate > 0) {
                 EightbyEightOutput(digiOut);
             }
-            else {pattern_to_display(defaultOutput);}*/
+            else {pattern_to_display(defaultOutput);}
         }
 
-        //if(beatTime.elapsed_time().count()>= 10000000){PKRst();}
         if(switchIn == 1) {// if the switch is sending power, use the LCD
             beatLED = 0;
-            // lcd.printf("min  %.3f V\n", minValue*3.3);
-            //lcd.printf("period %.3i ms\n", period);
+            
             lcd.printf("(Da Dum)^2 G4\n");
             if(heartRate < 40) {
                 lcd.printf("Finding HR\n");
@@ -280,23 +267,17 @@ int main()
             else {
                 lcd.printf("HR: %.0f BPM\n", heartRate);
             }
-            //lcd.printf("averaged: %0.2f\n",averaged);
-            //lcd.printf("last: %0.2f\n",averages.front());
-
         }
         else {// if the switch is not using power, use the LED
-            //lcd.printf("               \n                \n");
-            lcd.printf("(Da Dum)^2 G4\n");
-            lcd.printf("period %.3i ms\n", period);
+            lcd.printf("               \n                \n");
+            // lcd.printf("(Da Dum)^2 G4\n");
+            // lcd.printf("period %.3i ms\n", period);
             LEDTime = period/2;
             if(LEDTimer.elapsed_time().count() >= LEDTime) {
                 beatLED = !beatLED;
                 LEDTimer.reset();
             }
         }
-        /*
-        SigOut.write(averaged);
-        lcd.printf("Average: %0.2f\n",(averaged));*/
         /*if(period > 100) {
             sampling_time = period/8*1000;
         }*/
