@@ -21,7 +21,13 @@
 #define LOW 0
 #define HIGH 1
 
-// Blinking rate in milliseconds
+//TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
+//register select p26, LCD pin4
+// Enable p25, LCD pin 6
+// MSB4 p21, LCD pin 14 (Most Significant Bit 4)
+// MSB3 p22, LCD pin 13
+// MSB2 p23, LCD pin 12
+// MSB1 P24, LCD pin 11
 TextLCD lcd(p30, p29, p28, p27, p26, p25, TextLCD::LCD16x2);
 AnalogIn SigIn(p17);
 DigitalIn switchIn(p20);
@@ -31,14 +37,7 @@ DigitalOut load(p8); //will provide the load signal
 DigitalOut beatLED(LED1);
 Ticker reseter;
 Timer beatTime;//timer to track time between heartbeats
-Timer LEDTimer;
-//TextLCD lcd(REGSEL, ENABLE, MSB1, MSB2, MSB3, MSB4), TextLCD::LCD16x2);
-//register select p26, LCD pin4
-// Enable p25, LCD pin 6
-// MSB4 p21, LCD pin 14 (Most Significant Bit 4)
-// MSB3 p22, LCD pin 13
-// MSB2 p23, LCD pin 12
-// MSB1 P24, LCD pin 11
+
 float signal = SigIn.read();
 float previous = 0;
 float current = 0;
@@ -201,7 +200,6 @@ int main()
 {
     setup_dot_matrix();
     reseter.attach(&PKRst, 2s);
-    //LEDTimer.start();
     beatTime.start();
     while (true) {
         signal = SigIn.read();//take signal input
@@ -271,14 +269,6 @@ int main()
         }
         else {// if the switch is not using power, use the LED
             lcd.printf("               \n                \n");
-            // lcd.printf("(Da Dum)^2 G4\n");
-            // lcd.printf("period %.3i ms\n", period);
-            /*
-            LEDTime = period/2;
-            if(LEDTimer.elapsed_time().count() >= LEDTime) {
-                beatLED = !beatLED;
-                LEDTimer.reset();
-            }*/
             if(digiOut >= 6) {
                 beatLED = 1;
             }
@@ -286,9 +276,6 @@ int main()
                 beatLED = 0;
             }
         }
-        /*if(period > 100) {
-            sampling_time = period/8*1000;
-        }*/
         wait_us(sampling_time);
     }
 }
