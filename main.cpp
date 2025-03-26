@@ -72,10 +72,11 @@ float maxV = 0;
 bool risingEdge = false;
 bool fallingEdge = false;
 int sampling_time = 50000;
+int digiout;
 
-char values[8] = {0x01, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x80};
+char values[8] = {0x80, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x01};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-char defaultOutput[8] = {0x02, 0x08, 0x40, 0x80, 0x20, 0x08, 0x20, 0x02};
+char defaultOutput[8] = {0x02, 0x08, 0x40, 0x01, 0x20, 0x08, 0x20, 0x02};
 
 void RollingAverage() {
     if(filtered) {
@@ -200,7 +201,7 @@ int main()
 {
     setup_dot_matrix();
     reseter.attach(&PKRst, 2s);
-    LEDTimer.start();
+    //LEDTimer.start();
     beatTime.start();
     while (true) {
         signal = SigIn.read();//take signal input
@@ -214,7 +215,7 @@ int main()
             if (averaged < minValue) {minValue = averaged;}
             if (averaged > maxValue) {maxValue = averaged;}
 
-            int digiOut = 0;
+            digiOut = 0;
             PkPk = maxValue - minValue;
 
             if (averaged < minValue+(PkPk*1/8)){
@@ -272,10 +273,17 @@ int main()
             lcd.printf("               \n                \n");
             // lcd.printf("(Da Dum)^2 G4\n");
             // lcd.printf("period %.3i ms\n", period);
+            /*
             LEDTime = period/2;
             if(LEDTimer.elapsed_time().count() >= LEDTime) {
                 beatLED = !beatLED;
                 LEDTimer.reset();
+            }*/
+            if(digiOut >= 6) {
+                beatLED = 1;
+            }
+            else {
+                beatLED = 0;
             }
         }
         /*if(period > 100) {
