@@ -73,7 +73,7 @@ bool fallingEdge = false;
 int sampling_time = 50000;
 int digiout;
 
-char values[8] = {0x80, 0x02, 0x4, 0x08, 0x10, 0x20, 0x40, 0x01};
+char values[8] = {0x01, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x80};
 char displayOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 char defaultOutput[8] = {0x02, 0x08, 0x40, 0x01, 0x20, 0x08, 0x20, 0x02};
 
@@ -186,9 +186,9 @@ void clear(){
 void EightbyEightOutput(int digiout) {
     char value = values[digiout];
     char newOutput[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    newOutput[0] = value;
-    for(int i = 1; i <= 7; i++) {
-        newOutput[i] = displayOutput[i-1];
+    newOutput[7] = value;
+    for(int i = 0; i <= 6; i++) {
+        newOutput[i] = displayOutput[i+1];
     }
     for(int i = 0; i < 8; i++) {
         displayOutput[i] = newOutput[i];
